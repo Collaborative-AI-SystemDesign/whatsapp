@@ -1,0 +1,55 @@
+// ============================================
+// Chat Domain - Chat Room
+// ============================================
+
+// 채팅방 모델
+model ChatRoom {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String?  // 그룹 채팅방 이름 (1:1 채팅은 null)
+  type        ChatRoomType @default(ONE_TO_ONE) // 1:1 또는 그룹
+  avatar      String?  // 채팅방 이미지
+  lastMessage String?  // 마지막 메시지 미리보기
+  lastMessageAt DateTime? // 마지막 메시지 시간
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // 관계 (MongoDB는 참조만 저장)
+  participants UserChatRoom[]
+  messages     Message[]
+
+  @@map("chat_rooms")
+}
+
+enum ChatRoomType {
+  ONE_TO_ONE  // 1:1 채팅
+  GROUP       // 그룹 채팅
+}
+
+// 사용자-채팅방 관계 (다대다)
+model UserChatRoom {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String   @db.ObjectId
+  chatRoomId  String   @db.ObjectId
+  role        ChatRoomRole @default(PARTICIPANT) // 역할 (생성자, 관리자, 참여자)
+  unreadCount Int      @default(0) // 읽지 않은 메시지 수
+  lastReadAt  DateTime? // 마지막으로 읽은 시간
+  isMuted     Boolean  @default(false) // 알림 음소거 여부
+  joinedAt    DateTime @default(now()) // 참여 시간
+  leftAt      DateTime? // 나간 시간 (null이면 아직 참여 중)
+
+  // 관계 (MongoDB는 참조만 저장)
+  user     User     @relation(fields: [userId], references: [id])
+  chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id])
+
+  @@unique([userId, chatRoomId])
+  @@index([userId])
+  @@index([chatRoomId])
+  @@map("user_chat_rooms")
+}
+
+enum ChatRoomRole {
+  CREATOR     // 생성자
+  ADMIN       // 관리자
+  PARTICIPANT // 일반 참여자
+}
+

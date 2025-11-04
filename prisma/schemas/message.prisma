@@ -1,0 +1,37 @@
+// ============================================
+// Message Domain
+// ============================================
+
+// 메시지 모델
+model Message {
+  id          String      @id @default(auto()) @map("_id") @db.ObjectId
+  chatRoomId  String      @db.ObjectId
+  senderId    String      @db.ObjectId
+  content     String?     // 텍스트 메시지
+  messageType MessageType @default(TEXT)
+  fileUrl     String?     // 파일 URL (이미지, 동영상, 문서 등)
+  fileName    String?     // 파일명
+  fileSize    Int?        // 파일 크기 (bytes)
+  isEdited    Boolean     @default(false) // 수정 여부
+  isDeleted   Boolean     @default(false) // 삭제 여부
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // 관계 (MongoDB는 참조만 저장)
+  chatRoom   ChatRoom     @relation(fields: [chatRoomId], references: [id])
+  sender     User         @relation(fields: [senderId], references: [id])
+
+  @@index([chatRoomId, createdAt])
+  @@index([senderId])
+  @@map("messages")
+}
+
+enum MessageType {
+  TEXT        // 텍스트
+  IMAGE       // 이미지
+  VIDEO       // 동영상
+  AUDIO       // 음성 메시지
+  FILE        // 파일
+  LOCATION    // 위치
+  CONTACT     // 연락처
+}
