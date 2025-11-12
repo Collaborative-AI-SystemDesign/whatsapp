@@ -21,70 +21,61 @@ export class UsersController {
   /**
    * 사용자 생성
    * POST /users
+   *
+   * @returns SuccessResponse<User>
    */
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() createUserDto: CreateUserDto) {
-    const user = await this.usersService.createUser(createUserDto);
-    return {
-      status: 'success',
-      data: user,
-    };
+    return this.usersService.createUser(createUserDto);
   }
 
   /**
    * 모든 사용자 조회
    * GET /users
+   *
+   * @returns SuccessResponse<User[]>
    */
   @Get()
   async findAll() {
-    const users = await this.usersService.getAllUsers();
-    return {
-      status: 'success',
-      data: users,
-    };
+    return this.usersService.getAllUsers();
   }
 
   /**
    * ID로 사용자 조회
    * GET /users/:id
+   *
+   * @returns SuccessResponse<User>
    */
   @Get(':id')
   async findOne(@Param('id', MongoIdValidationPipe) id: string) {
-    const user = await this.usersService.getUserById(id);
-    return {
-      status: 'success',
-      data: user,
-    };
+    return this.usersService.getUserById(id);
   }
 
   /**
    * 사용자 정보 부분 업데이트
    * PATCH /users/:id
+   *
+   * @returns SuccessResponse<User>
    */
   @Patch(':id')
   async update(
     @Param('id', MongoIdValidationPipe) id: string,
     @Body() updateUserDto: UpdateUserDto,
   ) {
-    const user = await this.usersService.updateUser(id, updateUserDto);
-    return {
-      status: 'success',
-      data: user,
-    };
+    return this.usersService.updateUser(id, updateUserDto);
   }
 
   /**
    * 사용자 삭제
    * DELETE /users/:id
+   *
+   * @returns SuccessResponse<{ message: string }>
    */
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   async remove(@Param('id', MongoIdValidationPipe) id: string) {
     await this.usersService.deleteUser(id);
-    return {
-      status: 'success',
-      message: 'User deleted successfully',
-    };
+    return { message: 'User deleted successfully' };
   }
 }

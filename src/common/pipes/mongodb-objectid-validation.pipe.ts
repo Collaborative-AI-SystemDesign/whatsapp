@@ -1,4 +1,6 @@
-import { PipeTransform, Injectable, BadRequestException } from '@nestjs/common';
+import { PipeTransform, Injectable } from '@nestjs/common';
+import { AppException } from '../exceptions/app.exception';
+import { ErrorCode } from '../enums/error-code.enum';
 
 @Injectable()
 export class MongoIdValidationPipe implements PipeTransform<string, string> {
@@ -10,7 +12,7 @@ export class MongoIdValidationPipe implements PipeTransform<string, string> {
     const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(value);
 
     if (!isValidObjectId) {
-      throw new BadRequestException(`Invalid MongoDB ObjectId: ${value}`);
+      throw new AppException(ErrorCode.INVALID_OBJECT_ID, { value });
     }
 
     return value;

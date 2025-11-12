@@ -1,8 +1,8 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
-import { HttpExceptionFilter } from './common/filters/http-exception.filter';
-import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { TransformResponseInterceptor } from './common/interceptors/transform-response.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -16,13 +16,17 @@ async function bootstrap() {
     }),
   );
 
-  // Global exception filters 활성화
-  app.useGlobalFilters(
-    new PrismaExceptionFilter(),
-    new HttpExceptionFilter(),
-  );
+  // Global interceptor 활성화
+  // 모든 성공 응답을 일관된 형식으로 변환
+  app.useGlobalInterceptors(new TransformResponseInterceptor());
+
+  // Global exception filter 활성화
+  // 모든 예외를 일관된 형식으로 처리
+  app.useGlobalFilters(new AllExceptionsFilter());
 
   await app.listen(process.env.PORT ?? 3000);
-  console.log(`Application is running on: http://localhost:${process.env.PORT ?? 3000}`);
+  console.log(
+    `Application is running on: http://localhost:${process.env.PORT ?? 3000}`,
+  );
 }
 bootstrap();
