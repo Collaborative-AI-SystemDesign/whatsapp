@@ -37,7 +37,7 @@ export class TransformResponseInterceptor<T>
           success: true,
           data,
           timestamp: new Date().toISOString(),
-        } as SuccessResponse<T>;
+        };
       }),
     );
   }
