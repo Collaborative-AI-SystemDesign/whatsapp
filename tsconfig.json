@@ -1,25 +1,40 @@
 {
   "compilerOptions": {
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
-    "resolvePackageJsonExports": true,
-    "esModuleInterop": true,
-    "isolatedModules": true,
-    "declaration": true,
-    "removeComments": true,
-    "emitDecoratorMetadata": true,
-    "experimentalDecorators": true,
-    "allowSyntheticDefaultImports": true,
-    "target": "ES2023",
-    "sourceMap": true,
+    /* === 기본 설정 === */
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "outDir": "./dist",
-    "baseUrl": "./",
-    "incremental": true,
-    "skipLibCheck": true,
-    "strictNullChecks": true,
+    "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "noImplicitAny": false,
-    "strictBindCallApply": false,
-    "noFallthroughCasesInSwitch": false
-  }
+    "skipLibCheck": true, // 외부 라이브러리 타입 검사는 스킵 (성능 향상)
+
+    /* === 타입 안정성 === */
+    "strict": true,                  //  모든 엄격 타입 검사 활성화
+    "noImplicitAny": true,           //  any 자동 허용 금지
+    "strictNullChecks": true,        //  null, undefined 명확히 구분
+    "strictPropertyInitialization": false,  // DTO/Schema는 런타임에 초기화
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    "useUnknownInCatchVariables": true,
+
+    /* === 개발 품질 === */
+    "isolatedModules": true,         // ESLint와 호환
+    "noUnusedLocals": true,          // 사용되지 않는 변수 경고
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "resolveJsonModule": true,       // JSON import 허용
+
+    /* === NestJS 데코레이터 지원 === */
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "declaration": true,
+    "sourceMap": true,
+    "incremental": true,
+
+    /* === Node 환경 === */
+    "types": ["node", "jest"]        // 글로벌 타입 인식 (테스트 포함)
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
 }
