@@ -1,24 +1,4 @@
 services:
-  mongo:
-    image: mongo:7
-    container_name: mongo
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: whatsapp
-      MONGO_INITDB_ROOT_PASSWORD: whatsapp
-      MONGO_INITDB_DATABASE: whatsapp
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-    command: ["--bind_ip_all", "--wiredTigerCacheSizeGB", "1"]
-    healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
-    networks: [app-net]
-
   # rabbitmq:
   #   image: rabbitmq:3.13-management
   #   container_name: mq
