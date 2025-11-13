@@ -17,8 +17,9 @@ export class MessagesController {
     @Query('lastTimestamp') lastTimestamp?: string,
     @Query('limit') limit?: string,
   ): Promise<MessageDocument[]> {
-    const timestamp = lastTimestamp ? new Date(lastTimestamp) : undefined;
-    const limitNumber = limit ? parseInt(limit, 10) : 50;
+    const timestamp =
+      lastTimestamp !== undefined ? new Date(lastTimestamp) : undefined;
+    const limitNumber = limit !== undefined ? parseInt(limit, 10) : 50;
 
     return this.messagesService.getChatHistory(
       userId,

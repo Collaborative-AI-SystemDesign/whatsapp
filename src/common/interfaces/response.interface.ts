@@ -5,7 +5,7 @@
 /**
  * 성공 응답
  */
-export interface SuccessResponse<T = any> {
+export interface SuccessResponse<T = unknown> {
   success: true;
   data: T;
   timestamp: string;
@@ -20,7 +20,7 @@ export interface ErrorResponse {
     code?: string;
     message: string | string[];
     statusCode: number;
-    context?: Record<string, any>;
+    context?: Record<string, unknown>;
   };
   path: string;
   timestamp: string;
@@ -29,4 +29,4 @@ export interface ErrorResponse {
 /**
  * API 응답 (성공 또는 실패)
  */
-export type ApiResponse<T = any> = SuccessResponse<T> | ErrorResponse;
+export type ApiResponse<T = unknown> = SuccessResponse<T> | ErrorResponse;

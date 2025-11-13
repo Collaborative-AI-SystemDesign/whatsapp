@@ -16,14 +16,14 @@ export class TransformResponseInterceptor<T>
   implements NestInterceptor<T, SuccessResponse<T>>
 {
   intercept(
-    context: ExecutionContext,
+    _context: ExecutionContext,
     next: CallHandler<T>,
   ): Observable<SuccessResponse<T>> {
     return next.handle().pipe(
       map((data: T) => {
         // Controller에서 이미 { success: true, data: ... } 형식으로 반환한 경우
         if (
-          data &&
+          data != undefined &&
           typeof data === 'object' &&
           'success' in data &&
           'data' in data &&

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, FilterQuery, SortOrder } from 'mongoose';
 import { Message, MessageDocument } from '../schemas/message.schema';
 import { v4 as uuidv4 } from 'uuid';
 import { AppException } from '../../common/exceptions/app.exception';
@@ -52,11 +52,14 @@ export class MessagesService {
   /**
    * 미전달 메시지 조회 (특정 수신자)
    */
-  async findUndeliveredMessages(receiverId: string): Promise<MessageDocument[]> {
-    return this.messageModel
-      .find({ receiverId, undelivered: true })
-      .sort({ timestamp: 1 })
-      .exec();
+  async findUndeliveredMessages(
+    receiverId: string,
+  ): Promise<MessageDocument[]> {
+    const filter: FilterQuery<Message> = { receiverId, undelivered: true };
+    const sort: Record<string, SortOrder> = { timestamp: 1 };
+
+    const messages = await this.messageModel.find(filter).sort(sort).exec();
+    return messages as MessageDocument[];
   }
 
   /**
@@ -64,10 +67,7 @@ export class MessagesService {
    */
   async markAsDelivered(messageId: string): Promise<void> {
     await this.messageModel
-      .updateOne(
-        { messageId },
-        { undelivered: false, deliveredAt: new Date() },
-      )
+      .updateOne({ messageId }, { undelivered: false, deliveredAt: new Date() })
       .exec();
   }
 
@@ -89,18 +89,18 @@ export class MessagesService {
     lastTimestamp?: Date,
     limit: number = 50,
   ): Promise<MessageDocument[]> {
-    const query: any = {
+    const query: FilterQuery<Message> = {
       $or: [
         { senderId: userId, receiverId: chatParticipantId },
         { senderId: chatParticipantId, receiverId: userId },
       ],
     };
 
-    if (lastTimestamp) {
+    if (lastTimestamp !== undefined) {
       query.timestamp = { $lt: lastTimestamp };
     }
 
-    return this.messageModel
+    return await this.messageModel
       .find(query)
       .sort({ timestamp: -1 })
       .limit(limit)

@@ -9,6 +9,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import type { User } from '@prisma/client';
 import { UsersService } from '../services/users.service';
 import { CreateUserDto } from '../dto/create-user.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
@@ -26,8 +27,8 @@ export class UsersController {
    */
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  async create(@Body() createUserDto: CreateUserDto) {
-    return this.usersService.createUser(createUserDto);
+  async create(@Body() createUserDto: CreateUserDto): Promise<User> {
+    return await this.usersService.createUser(createUserDto);
   }
 
   /**
@@ -37,8 +38,8 @@ export class UsersController {
    * @returns SuccessResponse<User[]>
    */
   @Get()
-  async findAll() {
-    return this.usersService.getAllUsers();
+  async findAll(): Promise<User[]> {
+    return await this.usersService.getAllUsers();
   }
 
   /**
@@ -48,8 +49,8 @@ export class UsersController {
    * @returns SuccessResponse<User>
    */
   @Get(':id')
-  async findOne(@Param('id', MongoIdValidationPipe) id: string) {
-    return this.usersService.getUserById(id);
+  async findOne(@Param('id', MongoIdValidationPipe) id: string): Promise<User> {
+    return await this.usersService.getUserById(id);
   }
 
   /**
@@ -62,8 +63,8 @@ export class UsersController {
   async update(
     @Param('id', MongoIdValidationPipe) id: string,
     @Body() updateUserDto: UpdateUserDto,
-  ) {
-    return this.usersService.updateUser(id, updateUserDto);
+  ): Promise<User> {
+    return await this.usersService.updateUser(id, updateUserDto);
   }
 
   /**
@@ -74,7 +75,9 @@ export class UsersController {
    */
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
-  async remove(@Param('id', MongoIdValidationPipe) id: string) {
+  async remove(
+    @Param('id', MongoIdValidationPipe) id: string,
+  ): Promise<{ message: string }> {
     await this.usersService.deleteUser(id);
     return { message: 'User deleted successfully' };
   }

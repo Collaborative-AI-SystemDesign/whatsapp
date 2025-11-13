@@ -9,10 +9,11 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
     super();
   }
 
-  async onModuleInit() {
+  async onModuleInit(): Promise<void> {
     // 개발 환경에서만 자동으로 스키마 푸시
     const isDevelopment = this.configService.get('NODE_ENV') === 'development';
-    const autoSync = this.configService.get('PRISMA_AUTO_SYNC', 'false') === 'true';
+    const autoSync =
+      this.configService.get('PRISMA_AUTO_SYNC', 'false') === 'true';
 
     if (isDevelopment && autoSync) {
       try {

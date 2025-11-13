@@ -12,7 +12,7 @@ import { ErrorCode } from '../enums/error-code.enum';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
-  catch(exception: unknown, host: ArgumentsHost) {
+  catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
@@ -20,7 +20,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     let status: number;
     let errorCode: ErrorCode | undefined;
     let message: string | string[];
-    let context: Record<string, any> | undefined;
+    let context: Record<string, unknown> | undefined;
 
     // 1. AppException
     if (exception instanceof AppException) {
@@ -46,11 +46,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
       if (typeof exceptionResponse === 'string') {
         message = exceptionResponse;
-      } else if (
-        typeof exceptionResponse === 'object' &&
-        exceptionResponse !== null &&
-        'message' in exceptionResponse
-      ) {
+      } else if ('message' in exceptionResponse) {
         message = exceptionResponse.message as string | string[];
       } else {
         message = 'Internal server error';
@@ -73,10 +69,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const errorResponse = {
       success: false as const,
       error: {
-        ...(errorCode && { code: errorCode }),
+        ...(errorCode !== undefined && { code: errorCode }),
         message: Array.isArray(message) ? message : [message],
         statusCode: status,
-        ...(context && { context }),
+        ...(context !== undefined && { context }),
       },
       path: request.url,
       timestamp: new Date().toISOString(),
@@ -92,9 +88,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
     status: number;
     errorCode: ErrorCode;
     message: string;
-    context: Record<string, any>;
+    context: Record<string, unknown>;
   } {
-    const PRISMA_ERROR_MAP: Record<string, ErrorCode> = {
+    const PRISMA_ERROR_MAP: Partial<Record<string, ErrorCode>> = {
       P2002: ErrorCode.DUPLICATE_KEY, // Unique constraint
       P2025: ErrorCode.USER_NOT_FOUND, // Record not found
       P2003: ErrorCode.FOREIGN_KEY_CONSTRAINT, // Foreign key constraint
@@ -103,18 +99,23 @@ export class AllExceptionsFilter implements ExceptionFilter {
     };
 
     const errorCode =
-      PRISMA_ERROR_MAP[exception.code] || ErrorCode.DATABASE_ERROR;
-    const context: Record<string, any> = {
+      PRISMA_ERROR_MAP[exception.code] ?? ErrorCode.DATABASE_ERROR;
+    const context: Record<string, unknown> = {
       prismaCode: exception.code,
     };
 
     // P2002 (Unique constraint)인 경우 필드명 추가
-    if (exception.code === 'P2002' && exception.meta?.target) {
-      context.field = (exception.meta.target as string[]).join(', ');
+    if (exception.code === 'P2002' && exception.meta?.target !== undefined) {
+      const target = exception.meta.target;
+      context.field = Array.isArray(target)
+        ? target.join(', ')
+        : typeof target === 'string'
+          ? target
+          : JSON.stringify(target);
     }
 
     // P2011 (Null constraint)인 경우 컬럼명 추가
-    if (exception.code === 'P2011' && exception.meta?.column) {
+    if (exception.code === 'P2011' && exception.meta?.column !== undefined) {
       context.column = exception.meta.column;
     }
 
@@ -125,7 +126,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       status: appException.getStatusCode(),
       errorCode: appException.errorCode,
       message: appException.getMessage(),
-      context: appException.context || {},
+      context: appException.context ?? {},
     };
   }
 }

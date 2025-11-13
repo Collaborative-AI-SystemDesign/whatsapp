@@ -6,7 +6,7 @@ import {
 import { UserRepository } from '../repositories/user.repository';
 import { CreateUserDto } from '../dto/create-user.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
-import { User } from '@prisma/client';
+import type { User } from '@prisma/client';
 
 @Injectable()
 export class UsersService {
@@ -25,7 +25,7 @@ export class UsersService {
     }
 
     // email 중복 체크
-    if (createUserDto.email) {
+    if (this.isNonEmptyString(createUserDto.email)) {
       const existingEmail = await this.userRepository.findByEmail(
         createUserDto.email,
       );
@@ -63,7 +63,7 @@ export class UsersService {
    * 모든 사용자 조회
    */
   async getAllUsers(): Promise<User[]> {
-    return this.userRepository.findAll();
+    return await this.userRepository.findAll();
   }
 
   /**
@@ -74,7 +74,7 @@ export class UsersService {
     await this.getUserById(id);
 
     // email 중복 체크 (변경하는 경우)
-    if (updateUserDto.email) {
+    if (this.isNonEmptyString(updateUserDto.email)) {
       const existingEmail = await this.userRepository.findByEmail(
         updateUserDto.email,
       );
@@ -98,6 +98,13 @@ export class UsersService {
    * 사용자 존재 여부 확인
    */
   async userExists(id: string): Promise<boolean> {
-    return this.userRepository.exists(id);
+    return await this.userRepository.exists(id);
+  }
+
+  /**
+   * 문자열이 비어있지 않은지 확인하는 타입 가드
+   */
+  private isNonEmptyString(value: string | undefined | null): value is string {
+    return typeof value === 'string' && value.length > 0;
   }
 }
