@@ -74,6 +74,34 @@ export const ERROR_MESSAGES: Record<ErrorCode, ErrorMetadata> = {
   },
 
   // ============================================
+  // Cache Domain (Redis)
+  // ============================================
+  [ErrorCode.CACHE_CONNECTION_ERROR]: {
+    message: 'Failed to connect to cache server',
+    statusCode: HttpStatus.SERVICE_UNAVAILABLE,
+  },
+  [ErrorCode.CACHE_OPERATION_FAILED]: {
+    message: 'Cache operation failed',
+    statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+  },
+
+  // ============================================
+  // Queue Domain (RabbitMQ)
+  // ============================================
+  [ErrorCode.QUEUE_CONNECTION_ERROR]: {
+    message: 'Failed to connect to message queue',
+    statusCode: HttpStatus.SERVICE_UNAVAILABLE,
+  },
+  [ErrorCode.QUEUE_PUBLISH_FAILED]: {
+    message: 'Failed to publish message to queue',
+    statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+  },
+  [ErrorCode.QUEUE_CONSUME_FAILED]: {
+    message: 'Failed to consume message from queue',
+    statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+  },
+
+  // ============================================
   // Common / Validation
   // ============================================
   [ErrorCode.INVALID_OBJECT_ID]: {

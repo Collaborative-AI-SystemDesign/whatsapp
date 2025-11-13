@@ -8,7 +8,7 @@ import {
   MessageBody,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Injectable, UsePipes, ValidationPipe } from '@nestjs/common';
+import { Injectable, UsePipes, ValidationPipe, Logger } from '@nestjs/common';
 import { MessagesService } from '../messages/services/messages.service';
 import { QueueService } from '../queue/queue.service';
 import { CacheService } from '../cache/cache.service';
@@ -27,7 +27,9 @@ import {
 @Injectable()
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
-  server: Server;
+  server!: Server;
+
+  private readonly logger = new Logger(ChatGateway.name);
 
   // userId -> socketId 매핑
   private userSocketMap: Map<string, string> = new Map();
@@ -43,13 +45,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   /**
    * 클라이언트 연결 처리
    */
-  async handleConnection(client: Socket) {
+  async handleConnection(client: Socket): Promise<void> {
     try {
       // 쿼리 파라미터에서 userId 추출 (실제로는 JWT 토큰에서 추출해야 함)
       const userId = client.handshake.query.userId as string;
 
       if (!userId) {
-        console.error('Connection rejected: No userId provided');
+        this.logger.error('Connection rejected: No userId provided');
         client.disconnect();
         return;
       }
@@ -61,12 +63,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // Redis에 연결 정보 저장
       await this.cacheService.setUserConnection(userId, 'server-1'); // TODO: 실제 서버 ID 사용
 
-      console.log(`Client connected: ${client.id}, userId: ${userId}`);
+      this.logger.log(`Client connected: ${client.id}, userId: ${userId}`);
 
       // 오프라인 중 받은 메시지 전송
       await this.sendOfflineMessages(userId, client);
     } catch (error) {
-      console.error('Error in handleConnection:', error);
+      this.logger.error('Error in handleConnection:', error);
       client.disconnect();
     }
   }
@@ -74,11 +76,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   /**
    * 클라이언트 연결 해제 처리
    */
-  async handleDisconnect(client: Socket) {
+  async handleDisconnect(client: Socket): Promise<void> {
     try {
       const userId = this.socketUserMap.get(client.id);
 
-      if (userId) {
+      if (userId != null) {
         // 매핑 제거
         this.userSocketMap.delete(userId);
         this.socketUserMap.delete(client.id);
@@ -86,10 +88,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         // Redis에서 연결 정보 제거
         await this.cacheService.removeUserConnection(userId);
 
-        console.log(`Client disconnected: ${client.id}, userId: ${userId}`);
+        this.logger.log(`Client disconnected: ${client.id}, userId: ${userId}`);
       }
     } catch (error) {
-      console.error('Error in handleDisconnect:', error);
+      this.logger.error('Error in handleDisconnect:', error);
     }
   }
 
@@ -105,8 +107,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       const senderId = this.socketUserMap.get(client.id);
 
-      if (!senderId) {
-        console.error('Send message failed: User not authenticated');
+      if (senderId == null) {
+        this.logger.error('Send message failed: User not authenticated');
         return;
       }
 
@@ -137,11 +139,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       );
       client.emit('message_received', response);
 
-      console.log(
+      this.logger.log(
         `Message queued: ${message.messageId} from ${senderId} to ${receiver_id}`,
       );
     } catch (error) {
-      console.error('Error in handleSendMessage:', error);
+      this.logger.error('Error in handleSendMessage:', error);
       client.emit('error', { message: 'Failed to send message' });
     }
   }
@@ -158,8 +160,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       const userId = this.socketUserMap.get(client.id);
 
-      if (!userId) {
-        console.error('Message delivered failed: User not authenticated');
+      if (userId == null) {
+        this.logger.error('Message delivered failed: User not authenticated');
         return;
       }
 
@@ -171,27 +173,26 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // Redis inbox에서 제거
       await this.cacheService.removeFromInbox(userId, message_id);
 
-      console.log(`Message delivered: ${message_id} to ${userId}`);
+      this.logger.log(`Message delivered: ${message_id} to ${userId}`);
     } catch (error) {
-      console.error('Error in handleMessageDelivered:', error);
+      this.logger.error('Error in handleMessageDelivered:', error);
     }
   }
 
   /**
    * 특정 사용자에게 메시지 전송 (서버 내부 호출용)
    */
-  async sendMessageToUser(
-    receiverId: string,
-    message: IncomingMessageDto,
-  ): Promise<boolean> {
+  sendMessageToUser(receiverId: string, message: IncomingMessageDto): boolean {
     const socketId = this.userSocketMap.get(receiverId);
 
-    if (!socketId) {
+    if (socketId == null) {
       return false;
     }
 
     this.server.to(socketId).emit('incoming_message', message);
-    console.log(`Message sent to user ${receiverId}: ${message.message_id}`);
+    this.logger.log(
+      `Message sent to user ${receiverId}: ${message.message_id}`,
+    );
     return true;
   }
 
@@ -210,8 +211,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         return;
       }
 
-      console.log(
-        `Sending ${messageIds.length} offline messages to ${userId}`,
+      this.logger.log(
+        `Sending ${String(messageIds.length)} offline messages to ${userId}`,
       );
 
       // 각 메시지를 MongoDB에서 조회하여 전송
@@ -228,14 +229,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
           client.emit('incoming_message', incomingMessage);
         } catch (error) {
-          console.error(
+          this.logger.error(
             `Failed to send offline message ${messageId}:`,
             error,
           );
         }
       }
     } catch (error) {
-      console.error('Error in sendOfflineMessages:', error);
+      this.logger.error('Error in sendOfflineMessages:', error);
     }
   }
 

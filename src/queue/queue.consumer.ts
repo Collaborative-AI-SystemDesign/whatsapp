@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { QueueService, MessagePayload } from './queue.service';
 import { CacheService } from '../cache/cache.service';
 import { ChatGateway } from '../chat/chat.gateway';
@@ -6,16 +6,18 @@ import { IncomingMessageDto } from '../chat/dto';
 
 @Injectable()
 export class QueueConsumer implements OnModuleInit {
+  private readonly logger = new Logger(QueueConsumer.name);
+
   constructor(
     private queueService: QueueService,
     private cacheService: CacheService,
     private chatGateway: ChatGateway,
   ) {}
 
-  async onModuleInit() {
+  async onModuleInit(): Promise<void> {
     // Start consuming messages from RabbitMQ
     await this.queueService.consume(this.handleMessage.bind(this));
-    console.log('QueueConsumer started listening for messages');
+    this.logger.log('QueueConsumer started listening for messages');
   }
 
   /**
@@ -24,7 +26,7 @@ export class QueueConsumer implements OnModuleInit {
   private async handleMessage(payload: MessagePayload): Promise<void> {
     const { messageId, senderId, receiverId, content, timestamp } = payload;
 
-    console.log(
+    this.logger.log(
       `Processing message: ${messageId} from ${senderId} to ${receiverId}`,
     );
 
@@ -41,28 +43,32 @@ export class QueueConsumer implements OnModuleInit {
           new Date(timestamp).getTime(),
         );
 
-        const sent = await this.chatGateway.sendMessageToUser(
+        const sent = this.chatGateway.sendMessageToUser(
           receiverId,
           incomingMessage,
         );
 
-        if (sent) {
-          console.log(`Message delivered online: ${messageId} to ${receiverId}`);
-        } else {
+        if (!sent) {
           // WebSocket으로 전송 실패 (연결이 끊어진 경우)
-          console.log(
+          this.logger.log(
             `Failed to deliver online, adding to inbox: ${messageId}`,
           );
           await this.addToOfflineInbox(receiverId, messageId, payload);
+        } else {
+          this.logger.log(
+            `Message delivered online: ${messageId} to ${receiverId}`,
+          );
         }
       }
       // 2-2. 오프라인인 경우: Redis inbox에 저장
       else {
-        console.log(`User offline, adding to inbox: ${messageId} for ${receiverId}`);
+        this.logger.log(
+          `User offline, adding to inbox: ${messageId} for ${receiverId}`,
+        );
         await this.addToOfflineInbox(receiverId, messageId, payload);
       }
     } catch (error) {
-      console.error(`Error processing message ${messageId}:`, error);
+      this.logger.error(`Error processing message ${messageId}:`, error);
       throw error; // Re-throw to trigger message requeue
     }
   }
@@ -86,6 +92,6 @@ export class QueueConsumer implements OnModuleInit {
       timestamp: payload.timestamp,
     });
 
-    console.log(`Message added to inbox: ${messageId} for ${receiverId}`);
+    this.logger.log(`Message added to inbox: ${messageId} for ${receiverId}`);
   }
 }

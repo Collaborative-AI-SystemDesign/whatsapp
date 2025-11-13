@@ -29,6 +29,19 @@ export enum ErrorCode {
   MESSAGE_SEND_FAILED = 'MESSAGE_SEND_FAILED',
 
   // ============================================
+  // Cache Domain (Redis)
+  // ============================================
+  CACHE_CONNECTION_ERROR = 'CACHE_CONNECTION_ERROR',
+  CACHE_OPERATION_FAILED = 'CACHE_OPERATION_FAILED',
+
+  // ============================================
+  // Queue Domain (RabbitMQ)
+  // ============================================
+  QUEUE_CONNECTION_ERROR = 'QUEUE_CONNECTION_ERROR',
+  QUEUE_PUBLISH_FAILED = 'QUEUE_PUBLISH_FAILED',
+  QUEUE_CONSUME_FAILED = 'QUEUE_CONSUME_FAILED',
+
+  // ============================================
   // Common / Validation
   // ============================================
   INVALID_OBJECT_ID = 'INVALID_OBJECT_ID',
