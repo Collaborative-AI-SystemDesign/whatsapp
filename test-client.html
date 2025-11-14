@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Clone - Test Client</title>
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f0f2f5;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .client-box {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .client-box h2 {
+            margin-top: 0;
+            color: #128C7E;
+        }
+        .connect-section {
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        input, textarea, button {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        button {
+            background: #25D366;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background: #128C7E;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .disconnect-btn {
+            background: #dc3545;
+        }
+        .disconnect-btn:hover {
+            background: #c82333;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .messages {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 10px 0;
+            background: #e5ddd5;
+            border-radius: 4px;
+        }
+        .message {
+            margin: 5px 0;
+            padding: 8px 12px;
+            border-radius: 8px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+        .message.sent {
+            background: #DCF8C6;
+            margin-left: auto;
+            text-align: right;
+        }
+        .message.received {
+            background: white;
+            margin-right: auto;
+        }
+        .message.system {
+            background: #fff4e6;
+            text-align: center;
+            font-style: italic;
+            max-width: 100%;
+        }
+        .message-time {
+            font-size: 11px;
+            color: #667781;
+            margin-top: 4px;
+        }
+        label {
+            display: block;
+            margin-top: 10px;
+            font-weight: bold;
+            color: #333;
+        }
+        .send-section {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1 style="text-align: center; color: #128C7E;">WhatsApp Clone - Test Client</h1>
+
+    <div class="container">
+        <!-- Client A -->
+        <div class="client-box">
+            <h2>Client A (Alice)</h2>
+
+            <div class="connect-section">
+                <label>User ID:</label>
+                <input type="text" id="userIdA" value="user_alice" placeholder="Enter user ID">
+
+                <label>Server URL:</label>
+                <input type="text" id="serverUrlA" value="http://localhost:3000" placeholder="http://localhost:3000">
+
+                <button id="connectBtnA" onclick="connectClientA()">Connect</button>
+                <button id="disconnectBtnA" onclick="disconnectClientA()" style="display:none;" class="disconnect-btn">Disconnect</button>
+
+                <div id="statusA" class="status disconnected">Disconnected</div>
+            </div>
+
+            <div class="send-section">
+                <label>Receiver ID:</label>
+                <input type="text" id="receiverIdA" value="user_bob" placeholder="Enter receiver user ID">
+
+                <label>Message:</label>
+                <textarea id="messageA" placeholder="Type your message..." rows="3"></textarea>
+
+                <button id="sendBtnA" onclick="sendMessageA()" disabled>Send Message</button>
+            </div>
+
+            <label>Messages:</label>
+            <div id="messagesA" class="messages"></div>
+        </div>
+
+        <!-- Client B -->
+        <div class="client-box">
+            <h2>Client B (Bob)</h2>
+
+            <div class="connect-section">
+                <label>User ID:</label>
+                <input type="text" id="userIdB" value="user_bob" placeholder="Enter user ID">
+
+                <label>Server URL:</label>
+                <input type="text" id="serverUrlB" value="http://localhost:3000" placeholder="http://localhost:3000">
+
+                <button id="connectBtnB" onclick="connectClientB()">Connect</button>
+                <button id="disconnectBtnB" onclick="disconnectClientB()" style="display:none;" class="disconnect-btn">Disconnect</button>
+
+                <div id="statusB" class="status disconnected">Disconnected</div>
+            </div>
+
+            <div class="send-section">
+                <label>Receiver ID:</label>
+                <input type="text" id="receiverIdB" value="user_alice" placeholder="Enter receiver user ID">
+
+                <label>Message:</label>
+                <textarea id="messageB" placeholder="Type your message..." rows="3"></textarea>
+
+                <button id="sendBtnB" onclick="sendMessageB()" disabled>Send Message</button>
+            </div>
+
+            <label>Messages:</label>
+            <div id="messagesB" class="messages"></div>
+        </div>
+    </div>
+
+    <script>
+        let socketA = null;
+        let socketB = null;
+        let messageCounterA = 0;
+        let messageCounterB = 0;
+
+        function addMessage(clientId, message, type) {
+            const messagesDiv = document.getElementById(`messages${clientId}`);
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+
+            const time = new Date().toLocaleTimeString();
+            messageDiv.innerHTML = `
+                <div>${message}</div>
+                <div class="message-time">${time}</div>
+            `;
+
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        // Client A Functions
+        function connectClientA() {
+            const userId = document.getElementById('userIdA').value;
+            const serverUrl = document.getElementById('serverUrlA').value;
+
+            if (!userId) {
+                alert('Please enter a user ID');
+                return;
+            }
+
+            socketA = io(serverUrl, {
+                query: { userId }
+            });
+
+            socketA.on('connect', () => {
+                console.log('[Client A] Connected');
+                document.getElementById('statusA').textContent = `Connected as ${userId}`;
+                document.getElementById('statusA').className = 'status connected';
+                document.getElementById('connectBtnA').style.display = 'none';
+                document.getElementById('disconnectBtnA').style.display = 'block';
+                document.getElementById('sendBtnA').disabled = false;
+                addMessage('A', 'Connected to server', 'system');
+            });
+
+            socketA.on('disconnect', () => {
+                console.log('[Client A] Disconnected');
+                document.getElementById('statusA').textContent = 'Disconnected';
+                document.getElementById('statusA').className = 'status disconnected';
+                document.getElementById('connectBtnA').style.display = 'block';
+                document.getElementById('disconnectBtnA').style.display = 'none';
+                document.getElementById('sendBtnA').disabled = true;
+                addMessage('A', 'Disconnected from server', 'system');
+            });
+
+            socketA.on('message_received', (data) => {
+                console.log('[Client A] Message received confirmation:', data);
+                addMessage('A', `✓ Message sent (ID: ${data.message_id})`, 'system');
+            });
+
+            socketA.on('incoming_message', (data) => {
+                console.log('[Client A] Incoming message:', data);
+                addMessage('A', `From ${data.sender_id}: ${data.content}`, 'received');
+
+                // Send delivery confirmation
+                socketA.emit('message_delivered', {
+                    message_id: data.message_id,
+                    timestamp: Date.now()
+                });
+            });
+
+            socketA.on('error', (error) => {
+                console.error('[Client A] Error:', error);
+                addMessage('A', `Error: ${error.message || 'Unknown error'}`, 'system');
+            });
+        }
+
+        function disconnectClientA() {
+            if (socketA) {
+                socketA.disconnect();
+                socketA = null;
+            }
+        }
+
+        function sendMessageA() {
+            const receiverId = document.getElementById('receiverIdA').value;
+            const content = document.getElementById('messageA').value;
+
+            if (!receiverId || !content) {
+                alert('Please enter receiver ID and message');
+                return;
+            }
+
+            messageCounterA++;
+            const message = {
+                action: 'send_message',
+                receiver_id: receiverId,
+                content: content,
+                message_id_by_client: messageCounterA,
+                timestamp: Date.now()
+            };
+
+            socketA.emit('send_message', message);
+            addMessage('A', `To ${receiverId}: ${content}`, 'sent');
+            document.getElementById('messageA').value = '';
+        }
+
+        // Client B Functions
+        function connectClientB() {
+            const userId = document.getElementById('userIdB').value;
+            const serverUrl = document.getElementById('serverUrlB').value;
+
+            if (!userId) {
+                alert('Please enter a user ID');
+                return;
+            }
+
+            socketB = io(serverUrl, {
+                query: { userId }
+            });
+
+            socketB.on('connect', () => {
+                console.log('[Client B] Connected');
+                document.getElementById('statusB').textContent = `Connected as ${userId}`;
+                document.getElementById('statusB').className = 'status connected';
+                document.getElementById('connectBtnB').style.display = 'none';
+                document.getElementById('disconnectBtnB').style.display = 'block';
+                document.getElementById('sendBtnB').disabled = false;
+                addMessage('B', 'Connected to server', 'system');
+            });
+
+            socketB.on('disconnect', () => {
+                console.log('[Client B] Disconnected');
+                document.getElementById('statusB').textContent = 'Disconnected';
+                document.getElementById('statusB').className = 'status disconnected';
+                document.getElementById('connectBtnB').style.display = 'block';
+                document.getElementById('disconnectBtnB').style.display = 'none';
+                document.getElementById('sendBtnB').disabled = true;
+                addMessage('B', 'Disconnected from server', 'system');
+            });
+
+            socketB.on('message_received', (data) => {
+                console.log('[Client B] Message received confirmation:', data);
+                addMessage('B', `✓ Message sent (ID: ${data.message_id})`, 'system');
+            });
+
+            socketB.on('incoming_message', (data) => {
+                console.log('[Client B] Incoming message:', data);
+                addMessage('B', `From ${data.sender_id}: ${data.content}`, 'received');
+
+                // Send delivery confirmation
+                socketB.emit('message_delivered', {
+                    message_id: data.message_id,
+                    timestamp: Date.now()
+                });
+            });
+
+            socketB.on('error', (error) => {
+                console.error('[Client B] Error:', error);
+                addMessage('B', `Error: ${error.message || 'Unknown error'}`, 'system');
+            });
+        }
+
+        function disconnectClientB() {
+            if (socketB) {
+                socketB.disconnect();
+                socketB = null;
+            }
+        }
+
+        function sendMessageB() {
+            const receiverId = document.getElementById('receiverIdB').value;
+            const content = document.getElementById('messageB').value;
+
+            if (!receiverId || !content) {
+                alert('Please enter receiver ID and message');
+                return;
+            }
+
+            messageCounterB++;
+            const message = {
+                action: 'send_message',
+                receiver_id: receiverId,
+                content: content,
+                message_id_by_client: messageCounterB,
+                timestamp: Date.now()
+            };
+
+            socketB.emit('send_message', message);
+            addMessage('B', `To ${receiverId}: ${content}`, 'sent');
+            document.getElementById('messageB').value = '';
+        }
+
+        // Allow Enter key to send messages
+        document.getElementById('messageA').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessageA();
+            }
+        });
+
+        document.getElementById('messageB').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessageB();
+            }
+        });
+    </script>
+</body>
+</html>
