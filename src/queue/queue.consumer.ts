@@ -1,11 +1,18 @@
 import { Injectable, OnModuleInit, Logger, Inject } from '@nestjs/common';
-import type { IQueueService, ICacheService } from '../common/interfaces';
+import type {
+  IQueueService,
+  IUserConnectionCache,
+  IMessageInboxCache,
+  IMessageCache,
+} from '../common/interfaces';
 import type { MessagePayload } from '../common/interfaces';
 import { ChatGateway } from '../chat/chat.gateway';
 import { IncomingMessageDto } from '../chat/dto';
 import {
   QUEUE_SERVICE,
-  CACHE_SERVICE,
+  USER_CONNECTION_CACHE,
+  MESSAGE_INBOX_CACHE,
+  MESSAGE_CACHE,
 } from '../common/constants/injection-tokens';
 
 @Injectable()
@@ -14,7 +21,10 @@ export class QueueConsumer implements OnModuleInit {
 
   constructor(
     @Inject(QUEUE_SERVICE) private queueService: IQueueService,
-    @Inject(CACHE_SERVICE) private cacheService: ICacheService,
+    @Inject(USER_CONNECTION_CACHE)
+    private userConnectionCache: IUserConnectionCache,
+    @Inject(MESSAGE_INBOX_CACHE) private messageInboxCache: IMessageInboxCache,
+    @Inject(MESSAGE_CACHE) private messageCache: IMessageCache,
     private chatGateway: ChatGateway,
   ) {}
 
@@ -36,7 +46,7 @@ export class QueueConsumer implements OnModuleInit {
 
     try {
       // 1. Redis에서 수신자 온라인 여부 확인
-      const isOnline = await this.cacheService.isUserOnline(receiverId);
+      const isOnline = await this.userConnectionCache.isUserOnline(receiverId);
 
       // 2-1. 온라인인 경우: WebSocket으로 즉시 전송
       if (isOnline) {
@@ -86,10 +96,10 @@ export class QueueConsumer implements OnModuleInit {
     payload: MessagePayload,
   ): Promise<void> {
     // Redis inbox에 messageId 추가
-    await this.cacheService.addToInbox(receiverId, messageId);
+    await this.messageInboxCache.addToInbox(receiverId, messageId);
 
     // 메시지 데이터를 Redis에 캐싱 (선택적)
-    await this.cacheService.cacheMessage(messageId, {
+    await this.messageCache.cacheMessage(messageId, {
       senderId: payload.senderId,
       receiverId: payload.receiverId,
       content: payload.content,

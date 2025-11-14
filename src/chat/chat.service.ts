@@ -1,10 +1,15 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { MessagesService } from '../messages/services/messages.service';
-import type { IQueueService, ICacheService } from '../common/interfaces';
+import type {
+  IQueueService,
+  IUserConnectionCache,
+  IMessageInboxCache,
+} from '../common/interfaces';
 import { IncomingMessageDto } from './dto';
 import {
   QUEUE_SERVICE,
-  CACHE_SERVICE,
+  USER_CONNECTION_CACHE,
+  MESSAGE_INBOX_CACHE,
 } from '../common/constants/injection-tokens';
 
 @Injectable()
@@ -14,14 +19,16 @@ export class ChatService {
   constructor(
     private messagesService: MessagesService,
     @Inject(QUEUE_SERVICE) private queueService: IQueueService,
-    @Inject(CACHE_SERVICE) private cacheService: ICacheService,
+    @Inject(USER_CONNECTION_CACHE)
+    private userConnectionCache: IUserConnectionCache,
+    @Inject(MESSAGE_INBOX_CACHE) private messageInboxCache: IMessageInboxCache,
   ) {}
 
   /**
    * 사용자 연결 시 처리
    */
   async handleUserConnection(userId: string, serverId: string): Promise<void> {
-    await this.cacheService.setUserConnection(userId, serverId);
+    await this.userConnectionCache.setUserConnection(userId, serverId);
     this.logger.log(`User ${userId} connected to ${serverId}`);
   }
 
@@ -29,7 +36,7 @@ export class ChatService {
    * 사용자 연결 해제 시 처리
    */
   async handleUserDisconnection(userId: string): Promise<void> {
-    await this.cacheService.removeUserConnection(userId);
+    await this.userConnectionCache.removeUserConnection(userId);
     this.logger.log(`User ${userId} disconnected`);
   }
 
@@ -79,7 +86,7 @@ export class ChatService {
     await this.messagesService.markAsDelivered(messageId);
 
     // Redis inbox에서 제거
-    await this.cacheService.removeFromInbox(userId, messageId);
+    await this.messageInboxCache.removeFromInbox(userId, messageId);
 
     this.logger.log(`Message ${messageId} delivered to ${userId}`);
   }
@@ -89,7 +96,7 @@ export class ChatService {
    */
   async getOfflineMessages(userId: string): Promise<IncomingMessageDto[]> {
     // Redis inbox에서 미전달 메시지 ID 조회
-    const messageIds = await this.cacheService.getInbox(userId);
+    const messageIds = await this.messageInboxCache.getInbox(userId);
 
     if (messageIds.length === 0) {
       return [];
@@ -129,6 +136,6 @@ export class ChatService {
    * 사용자 온라인 여부 확인
    */
   async isUserOnline(userId: string): Promise<boolean> {
-    return await this.cacheService.isUserOnline(userId);
+    return await this.userConnectionCache.isUserOnline(userId);
   }
 }

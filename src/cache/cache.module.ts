@@ -1,14 +1,27 @@
 import { Module } from '@nestjs/common';
 import { CacheService } from './cache.service';
-import { CACHE_SERVICE } from '../common/constants/injection-tokens';
+import {
+  USER_CONNECTION_CACHE,
+  MESSAGE_INBOX_CACHE,
+  MESSAGE_CACHE,
+} from '../common/constants/injection-tokens';
 
 @Module({
   providers: [
+    CacheService, // 실제 구현체
     {
-      provide: CACHE_SERVICE,
-      useClass: CacheService,
+      provide: USER_CONNECTION_CACHE,
+      useExisting: CacheService,
+    },
+    {
+      provide: MESSAGE_INBOX_CACHE,
+      useExisting: CacheService,
+    },
+    {
+      provide: MESSAGE_CACHE,
+      useExisting: CacheService,
     },
   ],
-  exports: [CACHE_SERVICE],
+  exports: [USER_CONNECTION_CACHE, MESSAGE_INBOX_CACHE, MESSAGE_CACHE],
 })
 export class CacheModule {}
