@@ -8,8 +8,16 @@ import {
   MessageBody,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Injectable, UsePipes, ValidationPipe, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  UsePipes,
+  ValidationPipe,
+  Logger,
+  Inject,
+} from '@nestjs/common';
 import { ChatService } from './chat.service';
+import type { IConnectionManager } from '../common/interfaces';
+import { CONNECTION_MANAGER } from '../common/constants/injection-tokens';
 import {
   SendMessageDto,
   MessageReceivedDto,
@@ -29,12 +37,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   private readonly logger = new Logger(ChatGateway.name);
 
-  // userId -> socketId 매핑
-  private userSocketMap: Map<string, string> = new Map();
-  // socketId -> userId 매핑
-  private socketUserMap: Map<string, string> = new Map();
-
-  constructor(private chatService: ChatService) {}
+  constructor(
+    private chatService: ChatService,
+    @Inject(CONNECTION_MANAGER) private connectionManager: IConnectionManager,
+  ) {}
 
   /**
    * 클라이언트 연결 처리
@@ -50,9 +56,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         return;
       }
 
-      // 매핑 저장
-      this.userSocketMap.set(userId, client.id);
-      this.socketUserMap.set(client.id, userId);
+      // ConnectionManager에 매핑 저장
+      this.connectionManager.addConnection(userId, client.id);
 
       // ChatService에 위임
       await this.chatService.handleUserConnection(userId, 'server-1');
@@ -72,12 +77,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
    */
   async handleDisconnect(client: Socket): Promise<void> {
     try {
-      const userId = this.socketUserMap.get(client.id);
+      const userId = this.connectionManager.getUserId(client.id);
 
       if (userId != null) {
-        // 매핑 제거
-        this.userSocketMap.delete(userId);
-        this.socketUserMap.delete(client.id);
+        // ConnectionManager에서 매핑 제거
+        this.connectionManager.removeConnection(userId);
 
         // ChatService에 위임
         await this.chatService.handleUserDisconnection(userId);
@@ -99,7 +103,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() data: SendMessageDto,
   ): Promise<void> {
     try {
-      const senderId = this.socketUserMap.get(client.id);
+      const senderId = this.connectionManager.getUserId(client.id);
 
       if (senderId == null) {
         this.logger.error('Send message failed: User not authenticated');
@@ -135,7 +139,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() data: MessageDeliveredDto,
   ): Promise<void> {
     try {
-      const userId = this.socketUserMap.get(client.id);
+      const userId = this.connectionManager.getUserId(client.id);
 
       if (userId == null) {
         this.logger.error('Message delivered failed: User not authenticated');
@@ -157,7 +161,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
    * 특정 사용자에게 메시지 전송 (서버 내부 호출용)
    */
   sendMessageToUser(receiverId: string, message: IncomingMessageDto): boolean {
-    const socketId = this.userSocketMap.get(receiverId);
+    const socketId = this.connectionManager.getSocketId(receiverId);
 
     if (socketId == null) {
       return false;
@@ -202,6 +206,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
    * 사용자가 온라인인지 확인
    */
   isUserOnline(userId: string): boolean {
-    return this.userSocketMap.has(userId);
+    return this.connectionManager.isConnected(userId);
   }
 }
