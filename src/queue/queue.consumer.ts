@@ -1,0 +1,111 @@
+import { Injectable, OnModuleInit, Logger, Inject } from '@nestjs/common';
+import type {
+  IQueueService,
+  IUserConnectionCache,
+  IMessageInboxCache,
+  IMessageCache,
+} from '../common/interfaces';
+import type { MessagePayload } from '../common/interfaces';
+import { ChatGateway } from '../chat/chat.gateway';
+import { IncomingMessageDto } from '../chat/dto';
+import {
+  QUEUE_SERVICE,
+  USER_CONNECTION_CACHE,
+  MESSAGE_INBOX_CACHE,
+  MESSAGE_CACHE,
+} from '../common/constants/injection-tokens';
+
+@Injectable()
+export class QueueConsumer implements OnModuleInit {
+  private readonly logger = new Logger(QueueConsumer.name);
+
+  constructor(
+    @Inject(QUEUE_SERVICE) private queueService: IQueueService,
+    @Inject(USER_CONNECTION_CACHE)
+    private userConnectionCache: IUserConnectionCache,
+    @Inject(MESSAGE_INBOX_CACHE) private messageInboxCache: IMessageInboxCache,
+    @Inject(MESSAGE_CACHE) private messageCache: IMessageCache,
+    private chatGateway: ChatGateway,
+  ) {}
+
+  async onModuleInit(): Promise<void> {
+    // Start consuming messages from RabbitMQ
+    await this.queueService.consume(this.handleMessage.bind(this));
+    this.logger.log('QueueConsumer started listening for messages');
+  }
+
+  /**
+   * RabbitMQ에서 메시지를 받아서 처리
+   */
+  private async handleMessage(payload: MessagePayload): Promise<void> {
+    const { messageId, senderId, receiverId, content, timestamp } = payload;
+
+    this.logger.log(
+      `Processing message: ${messageId} from ${senderId} to ${receiverId}`,
+    );
+
+    try {
+      // 1. Redis에서 수신자 온라인 여부 확인
+      const isOnline = await this.userConnectionCache.isUserOnline(receiverId);
+
+      // 2-1. 온라인인 경우: WebSocket으로 즉시 전송
+      if (isOnline) {
+        const incomingMessage = new IncomingMessageDto(
+          messageId,
+          senderId,
+          content,
+          new Date(timestamp).getTime(),
+        );
+
+        const sent = this.chatGateway.sendMessageToUser(
+          receiverId,
+          incomingMessage,
+        );
+
+        if (!sent) {
+          // WebSocket으로 전송 실패 (연결이 끊어진 경우)
+          this.logger.log(
+            `Failed to deliver online, adding to inbox: ${messageId}`,
+          );
+          await this.addToOfflineInbox(receiverId, messageId, payload);
+        } else {
+          this.logger.log(
+            `Message delivered online: ${messageId} to ${receiverId}`,
+          );
+        }
+      }
+      // 2-2. 오프라인인 경우: Redis inbox에 저장
+      else {
+        this.logger.log(
+          `User offline, adding to inbox: ${messageId} for ${receiverId}`,
+        );
+        await this.addToOfflineInbox(receiverId, messageId, payload);
+      }
+    } catch (error) {
+      this.logger.error(`Error processing message ${messageId}:`, error);
+      throw error; // Re-throw to trigger message requeue
+    }
+  }
+
+  /**
+   * 오프라인 inbox에 메시지 추가
+   */
+  private async addToOfflineInbox(
+    receiverId: string,
+    messageId: string,
+    payload: MessagePayload,
+  ): Promise<void> {
+    // Redis inbox에 messageId 추가
+    await this.messageInboxCache.addToInbox(receiverId, messageId);
+
+    // 메시지 데이터를 Redis에 캐싱 (선택적)
+    await this.messageCache.cacheMessage(messageId, {
+      senderId: payload.senderId,
+      receiverId: payload.receiverId,
+      content: payload.content,
+      timestamp: payload.timestamp,
+    });
+
+    this.logger.log(`Message added to inbox: ${messageId} for ${receiverId}`);
+  }
+}
