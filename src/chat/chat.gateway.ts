@@ -9,9 +9,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Injectable, UsePipes, ValidationPipe, Logger } from '@nestjs/common';
-import { MessagesService } from '../messages/services/messages.service';
-import { QueueService } from '../queue/queue.service';
-import { CacheService } from '../cache/cache.service';
+import { ChatService } from './chat.service';
 import {
   SendMessageDto,
   MessageReceivedDto,
@@ -36,11 +34,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   // socketId -> userId 매핑
   private socketUserMap: Map<string, string> = new Map();
 
-  constructor(
-    private messagesService: MessagesService,
-    private queueService: QueueService,
-    private cacheService: CacheService,
-  ) {}
+  constructor(private chatService: ChatService) {}
 
   /**
    * 클라이언트 연결 처리
@@ -60,8 +54,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.userSocketMap.set(userId, client.id);
       this.socketUserMap.set(client.id, userId);
 
-      // Redis에 연결 정보 저장
-      await this.cacheService.setUserConnection(userId, 'server-1'); // TODO: 실제 서버 ID 사용
+      // ChatService에 위임
+      await this.chatService.handleUserConnection(userId, 'server-1');
 
       this.logger.log(`Client connected: ${client.id}, userId: ${userId}`);
 
@@ -85,8 +79,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         this.userSocketMap.delete(userId);
         this.socketUserMap.delete(client.id);
 
-        // Redis에서 연결 정보 제거
-        await this.cacheService.removeUserConnection(userId);
+        // ChatService에 위임
+        await this.chatService.handleUserDisconnection(userId);
 
         this.logger.log(`Client disconnected: ${client.id}, userId: ${userId}`);
       }
@@ -114,34 +108,17 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       const { receiver_id, content, message_id_by_client, timestamp } = data;
 
-      // 1. MongoDB에 메시지 저장
-      const message = await this.messagesService.createMessage(
+      // ChatService에 위임 (비즈니스 로직)
+      const messageId = await this.chatService.sendMessage(
         senderId,
         receiver_id,
         content,
         new Date(timestamp),
       );
 
-      // 2. RabbitMQ에 publish
-      await this.queueService.publishMessage({
-        messageId: message.messageId,
-        senderId,
-        receiverId: receiver_id,
-        content,
-        timestamp: new Date(timestamp).toISOString(),
-        messageIdByClient: message_id_by_client,
-      });
-
-      // 3. 발신자에게 message_received 응답
-      const response = new MessageReceivedDto(
-        message.messageId,
-        message_id_by_client,
-      );
+      // Gateway는 WebSocket 통신만 담당
+      const response = new MessageReceivedDto(messageId, message_id_by_client);
       client.emit('message_received', response);
-
-      this.logger.log(
-        `Message queued: ${message.messageId} from ${senderId} to ${receiver_id}`,
-      );
     } catch (error) {
       this.logger.error('Error in handleSendMessage:', error);
       client.emit('error', { message: 'Failed to send message' });
@@ -167,11 +144,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       const { message_id } = data;
 
-      // MongoDB에서 undelivered 상태 업데이트
-      await this.messagesService.markAsDelivered(message_id);
-
-      // Redis inbox에서 제거
-      await this.cacheService.removeFromInbox(userId, message_id);
+      // ChatService에 위임
+      await this.chatService.markMessageAsDelivered(userId, message_id);
 
       this.logger.log(`Message delivered: ${message_id} to ${userId}`);
     } catch (error) {
@@ -204,36 +178,20 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     client: Socket,
   ): Promise<void> {
     try {
-      // Redis inbox에서 미전달 메시지 ID 조회
-      const messageIds = await this.cacheService.getInbox(userId);
+      // ChatService에서 오프라인 메시지 조회
+      const messages = await this.chatService.getOfflineMessages(userId);
 
-      if (messageIds.length === 0) {
+      if (messages.length === 0) {
         return;
       }
 
       this.logger.log(
-        `Sending ${String(messageIds.length)} offline messages to ${userId}`,
+        `Sending ${String(messages.length)} offline messages to ${userId}`,
       );
 
-      // 각 메시지를 MongoDB에서 조회하여 전송
-      for (const messageId of messageIds) {
-        try {
-          const message = await this.messagesService.findByMessageId(messageId);
-
-          const incomingMessage = new IncomingMessageDto(
-            message.messageId,
-            message.senderId,
-            message.content,
-            message.timestamp.getTime(),
-          );
-
-          client.emit('incoming_message', incomingMessage);
-        } catch (error) {
-          this.logger.error(
-            `Failed to send offline message ${messageId}:`,
-            error,
-          );
-        }
+      // Gateway는 WebSocket 전송만 담당
+      for (const message of messages) {
+        client.emit('incoming_message', message);
       }
     } catch (error) {
       this.logger.error('Error in sendOfflineMessages:', error);

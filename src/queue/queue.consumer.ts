@@ -1,16 +1,20 @@
-import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
-import { QueueService, MessagePayload } from './queue.service';
-import { CacheService } from '../cache/cache.service';
+import { Injectable, OnModuleInit, Logger, Inject } from '@nestjs/common';
+import type { IQueueService, ICacheService } from '../common/interfaces';
+import type { MessagePayload } from '../common/interfaces';
 import { ChatGateway } from '../chat/chat.gateway';
 import { IncomingMessageDto } from '../chat/dto';
+import {
+  QUEUE_SERVICE,
+  CACHE_SERVICE,
+} from '../common/constants/injection-tokens';
 
 @Injectable()
 export class QueueConsumer implements OnModuleInit {
   private readonly logger = new Logger(QueueConsumer.name);
 
   constructor(
-    private queueService: QueueService,
-    private cacheService: CacheService,
+    @Inject(QUEUE_SERVICE) private queueService: IQueueService,
+    @Inject(CACHE_SERVICE) private cacheService: ICacheService,
     private chatGateway: ChatGateway,
   ) {}
 

@@ -8,9 +8,12 @@ import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { AppException } from '../common/exceptions/app.exception';
 import { ErrorCode } from '../common/enums/error-code.enum';
+import { ICacheService } from '../common/interfaces/cache.interface';
 
 @Injectable()
-export class CacheService implements OnModuleInit, OnModuleDestroy {
+export class CacheService
+  implements ICacheService, OnModuleInit, OnModuleDestroy
+{
   private redis!: Redis;
   private readonly logger = new Logger(CacheService.name);
 

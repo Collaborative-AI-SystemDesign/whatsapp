@@ -10,15 +10,10 @@ import { ChannelWrapper } from 'amqp-connection-manager';
 import { Channel, ConsumeMessage } from 'amqplib';
 import { AppException } from '../common/exceptions/app.exception';
 import { ErrorCode } from '../common/enums/error-code.enum';
-
-export interface MessagePayload {
-  messageId: string;
-  senderId: string;
-  receiverId: string;
-  content: string;
-  timestamp: string;
-  messageIdByClient?: number;
-}
+import {
+  IQueueService,
+  MessagePayload,
+} from '../common/interfaces/queue.interface';
 
 /**
  * Type guard to validate MessagePayload
@@ -41,7 +36,9 @@ function isMessagePayload(obj: unknown): obj is MessagePayload {
 }
 
 @Injectable()
-export class QueueService implements OnModuleInit, OnModuleDestroy {
+export class QueueService
+  implements IQueueService, OnModuleInit, OnModuleDestroy
+{
   private connection!: amqp.AmqpConnectionManager;
   private channelWrapper!: ChannelWrapper;
   private queueName: string;
