@@ -23,7 +23,78 @@
 
 ## Description
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+웹소켓 기반 채팅 서비스 프로젝트 (WhatsApp 스타일)
+
+## 🚀 프로젝트 실행 방법
+
+### 1. 환경 변수 설정
+
+프로젝트 루트에 `.env` 파일을 생성하고 다음 내용을 추가하세요:
+
+```env
+# Database
+DATABASE_URL="postgresql://whatsapp:whatsapp@localhost:5432/whatsapp?schema=public"
+
+# Application
+PORT=3000
+NODE_ENV=development
+```
+
+### 2. 의존성 설치
+
+```bash
+npm install
+```
+
+### 3. 데이터베이스 실행 (Docker Compose)
+
+```bash
+docker-compose up -d postgres
+```
+
+### 4. Prisma 스키마 병합 및 마이그레이션
+
+```bash
+# 스키마 병합
+npm run schema:merge
+
+# 마이그레이션 실행
+npm run prisma:migrate
+```
+
+### 5. Prisma Client 생성
+
+```bash
+npm run prisma:generate
+```
+
+### 6. 애플리케이션 실행
+
+```bash
+# 개발 모드 (Hot Reload)
+npm run start:dev
+```
+
+서버가 실행되면 `http://localhost:3000`에서 접근할 수 있습니다.
+
+## 📋 주요 명령어
+
+```bash
+# 스키마 병합
+npm run schema:merge
+
+# Prisma Client 생성
+npm run prisma:generate
+
+# 마이그레이션
+npm run prisma:migrate
+
+# Prisma Studio (DB GUI)
+npm run prisma:studio
+
+# 개발 서버 실행
+npm run start:dev
+```
 
 ## Project setup
 

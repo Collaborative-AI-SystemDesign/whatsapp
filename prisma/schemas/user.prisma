@@ -1,0 +1,22 @@
+// ============================================
+// User Domain
+// ============================================
+
+// 사용자 모델
+model User {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  username  String   @unique
+  email     String?  @unique
+  phone     String?  @unique
+  name      String?
+  avatar    String?  // 프로필 이미지 URL
+  status    String?  // 상태 메시지 (예: "온라인", "오프라인")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 관계 (MongoDB는 참조만 저장)
+  chatRooms UserChatRoom[]
+  messages  Message[]
+
+  @@map("users")
+}
