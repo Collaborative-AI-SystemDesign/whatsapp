@@ -107,6 +107,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       if (senderId == null) {
         this.logger.error('Send message failed: User not authenticated');
+        client.emit('error', { message: 'Failed to send message' });
         return;
       }
 
