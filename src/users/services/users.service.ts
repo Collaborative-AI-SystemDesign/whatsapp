@@ -6,35 +6,44 @@ import {
 import { UserRepository } from '../repositories/user.repository';
 import { CreateUserDto } from '../dto/create-user.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
-import type { User } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
+import type { User, Prisma } from '@prisma/client';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly userRepository: UserRepository) {}
+  constructor(
+    private readonly userRepository: UserRepository,
+    private readonly prisma: PrismaService,
+  ) {}
 
   /**
-   * 사용자 생성
+   * 사용자 생성 (트랜잭션 적용)
    */
   async createUser(createUserDto: CreateUserDto): Promise<User> {
-    // username 중복 체크
-    const existingUser = await this.userRepository.findByUsername(
-      createUserDto.username,
-    );
-    if (existingUser) {
-      throw new ConflictException('Username already exists');
-    }
-
-    // email 중복 체크
-    if (this.isNonEmptyString(createUserDto.email)) {
-      const existingEmail = await this.userRepository.findByEmail(
-        createUserDto.email,
-      );
-      if (existingEmail) {
-        throw new ConflictException('Email already exists');
+    return this.prisma.executeTransaction(async (tx) => {
+      // username 중복 체크
+      const existingUser = await tx.user.findUnique({
+        where: { username: createUserDto.username },
+      });
+      if (existingUser) {
+        throw new ConflictException('Username already exists');
       }
-    }
 
-    return this.userRepository.create(createUserDto);
+      // email 중복 체크
+      if (this.isNonEmptyString(createUserDto.email)) {
+        const existingEmail = await tx.user.findUnique({
+          where: { email: createUserDto.email },
+        });
+        if (existingEmail) {
+          throw new ConflictException('Email already exists');
+        }
+      }
+
+      // 사용자 생성
+      return tx.user.create({
+        data: createUserDto as Prisma.UserCreateInput,
+      });
+    });
   }
 
   /**
@@ -67,23 +76,32 @@ export class UsersService {
   }
 
   /**
-   * 사용자 정보 업데이트
+   * 사용자 정보 업데이트 (트랜잭션 적용)
    */
   async updateUser(id: string, updateUserDto: UpdateUserDto): Promise<User> {
-    // 사용자 존재 확인
-    await this.getUserById(id);
-
-    // email 중복 체크 (변경하는 경우)
-    if (this.isNonEmptyString(updateUserDto.email)) {
-      const existingEmail = await this.userRepository.findByEmail(
-        updateUserDto.email,
-      );
-      if (existingEmail && existingEmail.id !== id) {
-        throw new ConflictException('Email already exists');
+    return this.prisma.executeTransaction(async (tx) => {
+      // 사용자 존재 확인
+      const user = await tx.user.findUnique({ where: { id } });
+      if (!user) {
+        throw new NotFoundException(`User with ID ${id} not found`);
       }
-    }
 
-    return this.userRepository.update(id, updateUserDto);
+      // email 중복 체크 (변경하는 경우)
+      if (this.isNonEmptyString(updateUserDto.email)) {
+        const existingEmail = await tx.user.findUnique({
+          where: { email: updateUserDto.email },
+        });
+        if (existingEmail && existingEmail.id !== id) {
+          throw new ConflictException('Email already exists');
+        }
+      }
+
+      // 사용자 업데이트
+      return tx.user.update({
+        where: { id },
+        data: updateUserDto as Prisma.UserUpdateInput,
+      });
+    });
   }
 
   /**

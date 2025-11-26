@@ -72,6 +72,18 @@ export class MessagesService {
   }
 
   /**
+   * 메시지를 미전달 상태로 되돌림 (보상 트랜잭션용)
+   */
+  async markAsUndelivered(messageId: string): Promise<void> {
+    await this.messageModel
+      .updateOne(
+        { messageId },
+        { $unset: { deliveredAt: '' }, undelivered: true },
+      )
+      .exec();
+  }
+
+  /**
    * 메시지 읽음 표시
    */
   async markAsRead(messageId: string): Promise<void> {
@@ -120,6 +132,13 @@ export class MessagesService {
         deliveredAt: { $lt: cutoffDate },
       })
       .exec();
+  }
+
+  /**
+   * 메시지 ID로 메시지 삭제 (보상 트랜잭션용)
+   */
+  async deleteByMessageId(messageId: string): Promise<void> {
+    await this.messageModel.deleteOne({ messageId }).exec();
   }
 
   /**

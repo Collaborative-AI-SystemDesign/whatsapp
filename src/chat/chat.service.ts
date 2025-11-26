@@ -41,7 +41,7 @@ export class ChatService {
   }
 
   /**
-   * 메시지 전송 처리
+   * 메시지 전송 처리 (보상 트랜잭션 패턴 적용)
    *
    * @returns messageId - 생성된 메시지 ID
    */
@@ -51,44 +51,96 @@ export class ChatService {
     content: string,
     timestamp: Date,
   ): Promise<string> {
-    // 1. MongoDB에 메시지 저장
-    const message = await this.messagesService.createMessage(
-      senderId,
-      receiverId,
-      content,
-      timestamp,
-    );
+    let message: Awaited<ReturnType<typeof this.messagesService.createMessage>>;
 
-    // 2. RabbitMQ에 발행
-    await this.queueService.publishMessage({
-      messageId: message.messageId,
-      senderId,
-      receiverId,
-      content,
-      timestamp: timestamp.toISOString(),
-    });
+    try {
+      // 1. MongoDB에 메시지 저장
+      message = await this.messagesService.createMessage(
+        senderId,
+        receiverId,
+        content,
+        timestamp,
+      );
 
-    this.logger.log(
-      `Message sent: ${message.messageId} from ${senderId} to ${receiverId}`,
-    );
+      // 2. RabbitMQ에 발행
+      await this.queueService.publishMessage({
+        messageId: message.messageId,
+        senderId,
+        receiverId,
+        content,
+        timestamp: timestamp.toISOString(),
+      });
 
-    return message.messageId;
+      this.logger.log(
+        `Message sent: ${message.messageId} from ${senderId} to ${receiverId}`,
+      );
+
+      return message.messageId;
+    } catch (error) {
+      // RabbitMQ 발행 실패 시 보상 트랜잭션: MongoDB에서 메시지 삭제
+      if (message) {
+        try {
+          await this.messagesService.deleteByMessageId(message.messageId);
+          this.logger.warn(
+            `Compensated: Deleted message ${message.messageId} after RabbitMQ publish failure`,
+          );
+        } catch (deleteError) {
+          this.logger.error(
+            `Failed to compensate: Could not delete message ${message.messageId}`,
+            deleteError,
+          );
+        }
+      }
+
+      this.logger.error(
+        `Failed to send message from ${senderId} to ${receiverId}:`,
+        error,
+      );
+      throw error;
+    }
   }
 
   /**
-   * 메시지 전달 확인 처리
+   * 메시지 전달 확인 처리 (보상 트랜잭션 패턴 적용)
    */
   async markMessageAsDelivered(
     userId: string,
     messageId: string,
   ): Promise<void> {
-    // MongoDB에서 undelivered 상태 업데이트
-    await this.messagesService.markAsDelivered(messageId);
+    let wasMarkedAsDelivered = false;
 
-    // Redis inbox에서 제거
-    await this.messageInboxCache.removeFromInbox(userId, messageId);
+    try {
+      // 1. MongoDB에서 undelivered 상태 업데이트
+      await this.messagesService.markAsDelivered(messageId);
+      wasMarkedAsDelivered = true;
 
-    this.logger.log(`Message ${messageId} delivered to ${userId}`);
+      // 2. Redis inbox에서 제거
+      await this.messageInboxCache.removeFromInbox(userId, messageId);
+
+      this.logger.log(`Message ${messageId} delivered to ${userId}`);
+    } catch (error) {
+      // Redis 작업 실패 시 보상 트랜잭션: MongoDB 상태 롤백
+      if (wasMarkedAsDelivered) {
+        try {
+          // MongoDB에서 다시 undelivered 상태로 되돌림
+          await this.messagesService.markAsUndelivered(messageId);
+          this.logger.warn(
+            `Compensated: Reverted message ${messageId} to undelivered after Redis failure`,
+          );
+        } catch (rollbackError) {
+          this.logger.error(
+            `Failed to compensate: Could not rollback message ${messageId}`,
+            rollbackError,
+          );
+        }
+      }
+
+      this.logger.error(
+        `Failed to mark message ${messageId} as delivered for ${userId}:`,
+        error,
+      );
+      throw error;
+    }
   }
 
   /**
